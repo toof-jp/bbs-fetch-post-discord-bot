@@ -102,7 +102,7 @@ impl EventHandler for Bot {
                         }
                     } else {
                         let mut response = String::new();
-                        for post in posts.iter().take(5) {
+                        for post in posts.iter() {
                             response.push_str(&format!("{}\n", post));
                             if response.len() > 1800 {
                                 response.push_str("...(表示制限により省略)");
