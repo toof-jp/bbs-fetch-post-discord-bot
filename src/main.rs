@@ -80,10 +80,14 @@ impl EventHandler for Bot {
             return;
         }
 
+        // Remove mentions from content
         let content = msg.content.clone();
+        let mention_regex = Regex::new(r"<@!?\d+>").unwrap();
+        let cleaned_content = mention_regex.replace_all(&content, "").trim().to_string();
+        
         let range_regex = Regex::new(r"(\d+)(?:-(\d+))?").unwrap();
 
-        if let Some(captures) = range_regex.captures(&content) {
+        if let Some(captures) = range_regex.captures(&cleaned_content) {
             let start = captures.get(1).unwrap().as_str().parse::<i32>().unwrap();
             let end = captures.get(2).map(|m| m.as_str().parse::<i32>().unwrap());
 
