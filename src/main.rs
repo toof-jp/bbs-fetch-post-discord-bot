@@ -1,17 +1,17 @@
+use std::collections::HashSet;
+use std::sync::Arc;
+use std::{env, fmt};
+
 use anyhow::Result;
 use chrono::NaiveDateTime;
 use regex::Regex;
 use serde::Serialize;
-use sqlx::FromRow;
 use serenity::async_trait;
 use serenity::model::channel::Message;
 use serenity::model::gateway::Ready;
 use serenity::prelude::*;
 use sqlx::postgres::PgPool;
-use std::collections::HashSet;
-use std::env;
-use std::fmt;
-use std::sync::Arc;
+use sqlx::FromRow;
 
 #[derive(Debug, Default, Serialize, FromRow)]
 pub struct Res {
@@ -39,9 +39,9 @@ async fn get_res_by_numbers(pool: &PgPool, numbers: Vec<i32>) -> Result<Vec<Res>
     if numbers.is_empty() {
         return Ok(Vec::new());
     }
-    
+
     let query = "SELECT * FROM res WHERE no = ANY($1) ORDER BY no ASC";
-    
+
     sqlx::query_as::<_, Res>(query)
         .bind(&numbers)
         .fetch_all(pool)
@@ -58,23 +58,23 @@ enum RangeSpec {
 fn parse_range_specifications(input: &str) -> Vec<RangeSpec> {
     let mut specs = Vec::new();
     let parts: Vec<&str> = input.split(',').collect();
-    
+
     for part in parts {
         let trimmed = part.trim();
         if trimmed.is_empty() {
             continue;
         }
-        
+
         let (is_exclude, range_str) = if trimmed.starts_with('^') {
             (true, &trimmed[1..])
         } else {
             (false, trimmed)
         };
-        
+
         if let Some(dash_pos) = range_str.find('-') {
             let start_str = &range_str[..dash_pos];
             let end_str = &range_str[dash_pos + 1..];
-            
+
             if let (Ok(start), Ok(end)) = (start_str.parse::<i32>(), end_str.parse::<i32>()) {
                 if is_exclude {
                     specs.push(RangeSpec::Exclude(start, Some(end)));
@@ -90,14 +90,14 @@ fn parse_range_specifications(input: &str) -> Vec<RangeSpec> {
             }
         }
     }
-    
+
     specs
 }
 
 fn calculate_post_numbers(specs: Vec<RangeSpec>) -> Vec<i32> {
     let mut included = HashSet::new();
     let mut excluded = HashSet::new();
-    
+
     for spec in specs {
         match spec {
             RangeSpec::Include(start, end) => {
@@ -120,7 +120,7 @@ fn calculate_post_numbers(specs: Vec<RangeSpec>) -> Vec<i32> {
             }
         }
     }
-    
+
     let mut result: Vec<i32> = included.difference(&excluded).cloned().collect();
     result.sort();
     result
@@ -142,10 +142,10 @@ impl EventHandler for Bot {
         let content = msg.content.clone();
         let mention_regex = Regex::new(r"<@!?\d+>").unwrap();
         let cleaned_content = mention_regex.replace_all(&content, "").trim().to_string();
-        
+
         // Parse range specifications
         let specs = parse_range_specifications(&cleaned_content);
-        
+
         if specs.is_empty() {
             if let Err(e) = msg
                 .reply(
@@ -158,9 +158,9 @@ impl EventHandler for Bot {
             }
             return;
         }
-        
+
         let post_numbers = calculate_post_numbers(specs);
-        
+
         if post_numbers.is_empty() {
             if let Err(e) = msg
                 .reply(&ctx.http, "指定された範囲には表示するレスがありません。")
@@ -172,39 +172,39 @@ impl EventHandler for Bot {
         }
 
         match get_res_by_numbers(&self.pool, post_numbers).await {
-                Ok(posts) => {
-                    if posts.is_empty() {
-                        if let Err(e) = msg
-                            .reply(&ctx.http, "指定された範囲のレスが見つかりませんでした。")
-                            .await
-                        {
-                            eprintln!("Error sending message: {:?}", e);
-                        }
-                    } else {
-                        let mut response = String::new();
-                        for post in posts.iter() {
-                            response.push_str(&format!("{}\n", post));
-                            if response.len() > 1800 {
-                                response.push_str("...(表示制限により省略)");
-                                break;
-                            }
-                        }
-
-                        if let Err(e) = msg.reply(&ctx.http, response).await {
-                            eprintln!("Error sending message: {:?}", e);
-                        }
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Database error: {:?}", e);
+            Ok(posts) => {
+                if posts.is_empty() {
                     if let Err(e) = msg
-                        .reply(&ctx.http, "データベースエラーが発生しました。")
+                        .reply(&ctx.http, "指定された範囲のレスが見つかりませんでした。")
                         .await
                     {
                         eprintln!("Error sending message: {:?}", e);
                     }
+                } else {
+                    let mut response = String::new();
+                    for post in posts.iter() {
+                        response.push_str(&format!("{}\n", post));
+                        if response.len() > 1800 {
+                            response.push_str("...(表示制限により省略)");
+                            break;
+                        }
+                    }
+
+                    if let Err(e) = msg.reply(&ctx.http, response).await {
+                        eprintln!("Error sending message: {:?}", e);
+                    }
                 }
             }
+            Err(e) => {
+                eprintln!("Database error: {:?}", e);
+                if let Err(e) = msg
+                    .reply(&ctx.http, "データベースエラーが発生しました。")
+                    .await
+                {
+                    eprintln!("Error sending message: {:?}", e);
+                }
+            }
+        }
     }
 
     async fn ready(&self, _: Context, ready: Ready) {
