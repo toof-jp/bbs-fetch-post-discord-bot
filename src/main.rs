@@ -49,10 +49,20 @@ async fn get_res_by_numbers(pool: &PgPool, numbers: Vec<i32>) -> Result<Vec<Res>
         .map_err(Into::into)
 }
 
+async fn get_max_post_number(pool: &PgPool) -> Result<i32> {
+    let query = "SELECT MAX(no) FROM res";
+
+    let row: (Option<i32>,) = sqlx::query_as(query).fetch_one(pool).await?;
+
+    Ok(row.0.unwrap_or(0))
+}
+
 #[derive(Debug)]
 enum RangeSpec {
     Include(i32, Option<i32>),
     Exclude(i32, Option<i32>),
+    IncludeFrom(i32), // For open-ended ranges like "123-"
+    ExcludeFrom(i32), // For open-ended exclusions like "^123-"
 }
 
 fn parse_range_specifications(input: &str) -> Vec<RangeSpec> {
@@ -75,11 +85,21 @@ fn parse_range_specifications(input: &str) -> Vec<RangeSpec> {
             let start_str = &range_str[..dash_pos];
             let end_str = &range_str[dash_pos + 1..];
 
-            if let (Ok(start), Ok(end)) = (start_str.parse::<i32>(), end_str.parse::<i32>()) {
-                if is_exclude {
-                    specs.push(RangeSpec::Exclude(start, Some(end)));
-                } else {
-                    specs.push(RangeSpec::Include(start, Some(end)));
+            if let Ok(start) = start_str.parse::<i32>() {
+                if end_str.is_empty() {
+                    // Open-ended range like "123-"
+                    if is_exclude {
+                        specs.push(RangeSpec::ExcludeFrom(start));
+                    } else {
+                        specs.push(RangeSpec::IncludeFrom(start));
+                    }
+                } else if let Ok(end) = end_str.parse::<i32>() {
+                    // Closed range like "123-456"
+                    if is_exclude {
+                        specs.push(RangeSpec::Exclude(start, Some(end)));
+                    } else {
+                        specs.push(RangeSpec::Include(start, Some(end)));
+                    }
                 }
             }
         } else if let Ok(num) = range_str.parse::<i32>() {
@@ -94,7 +114,7 @@ fn parse_range_specifications(input: &str) -> Vec<RangeSpec> {
     specs
 }
 
-fn calculate_post_numbers(specs: Vec<RangeSpec>) -> Vec<i32> {
+fn calculate_post_numbers(specs: Vec<RangeSpec>, max_post_number: i32) -> Vec<i32> {
     let mut included = HashSet::new();
     let mut excluded = HashSet::new();
 
@@ -109,6 +129,12 @@ fn calculate_post_numbers(specs: Vec<RangeSpec>) -> Vec<i32> {
                     included.insert(start);
                 }
             }
+            RangeSpec::IncludeFrom(start) => {
+                // Include all posts from start to max_post_number
+                for i in start..=max_post_number {
+                    included.insert(i);
+                }
+            }
             RangeSpec::Exclude(start, end) => {
                 if let Some(end_num) = end {
                     for i in start..=end_num {
@@ -116,6 +142,12 @@ fn calculate_post_numbers(specs: Vec<RangeSpec>) -> Vec<i32> {
                     }
                 } else {
                     excluded.insert(start);
+                }
+            }
+            RangeSpec::ExcludeFrom(start) => {
+                // Exclude all posts from start to max_post_number
+                for i in start..=max_post_number {
+                    excluded.insert(i);
                 }
             }
         }
@@ -150,7 +182,7 @@ impl EventHandler for Bot {
             if let Err(e) = msg
                 .reply(
                     &ctx.http,
-                    "使い方: @bot 123 または @bot 123-128 または @bot 123,124-128,^126-127",
+                    "使い方: @bot 123 または @bot 123-128 または @bot 123- または @bot 123,124-128,^126-127",
                 )
                 .await
             {
@@ -159,7 +191,30 @@ impl EventHandler for Bot {
             return;
         }
 
-        let post_numbers = calculate_post_numbers(specs);
+        // Check if any spec requires max post number
+        let needs_max = specs
+            .iter()
+            .any(|spec| matches!(spec, RangeSpec::IncludeFrom(_) | RangeSpec::ExcludeFrom(_)));
+
+        let max_post_number = if needs_max {
+            match get_max_post_number(&self.pool).await {
+                Ok(max) => max,
+                Err(e) => {
+                    eprintln!("Error getting max post number: {:?}", e);
+                    if let Err(e) = msg
+                        .reply(&ctx.http, "データベースエラーが発生しました。")
+                        .await
+                    {
+                        eprintln!("Error sending message: {:?}", e);
+                    }
+                    return;
+                }
+            }
+        } else {
+            0 // Won't be used if not needed
+        };
+
+        let post_numbers = calculate_post_numbers(specs, max_post_number);
 
         if post_numbers.is_empty() {
             if let Err(e) = msg
