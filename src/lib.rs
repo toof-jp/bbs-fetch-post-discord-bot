@@ -60,8 +60,8 @@ pub enum RangeSpec {
     // Relative references (? prefix) with digit count
     RelativeInclude(i32, Option<i32>, usize), // (start, end, digit_count)
     RelativeExclude(i32, Option<i32>, usize), // (start, end, digit_count)
-    RelativeIncludeFrom(i32, usize), // (start, digit_count)
-    RelativeExcludeFrom(i32, usize), // (start, digit_count)
+    RelativeIncludeFrom(i32, usize),          // (start, digit_count)
+    RelativeExcludeFrom(i32, usize),          // (start, digit_count)
 }
 
 pub fn parse_range_specifications(input: &str) -> Vec<RangeSpec> {
@@ -92,20 +92,28 @@ pub fn parse_range_specifications(input: &str) -> Vec<RangeSpec> {
 
             if let Ok(start) = start_str.parse::<i32>() {
                 let digit_count = if is_relative { start_str.len() } else { 0 };
-                
+
                 if end_str.is_empty() {
                     // Open-ended range like "123-"
                     match (is_relative, is_exclude) {
-                        (true, true) => specs.push(RangeSpec::RelativeExcludeFrom(start, digit_count)),
-                        (true, false) => specs.push(RangeSpec::RelativeIncludeFrom(start, digit_count)),
+                        (true, true) => {
+                            specs.push(RangeSpec::RelativeExcludeFrom(start, digit_count))
+                        }
+                        (true, false) => {
+                            specs.push(RangeSpec::RelativeIncludeFrom(start, digit_count))
+                        }
                         (false, true) => specs.push(RangeSpec::ExcludeFrom(start)),
                         (false, false) => specs.push(RangeSpec::IncludeFrom(start)),
                     }
                 } else if let Ok(end) = end_str.parse::<i32>() {
                     // Closed range like "123-456"
                     match (is_relative, is_exclude) {
-                        (true, true) => specs.push(RangeSpec::RelativeExclude(start, Some(end), digit_count)),
-                        (true, false) => specs.push(RangeSpec::RelativeInclude(start, Some(end), digit_count)),
+                        (true, true) => {
+                            specs.push(RangeSpec::RelativeExclude(start, Some(end), digit_count))
+                        }
+                        (true, false) => {
+                            specs.push(RangeSpec::RelativeInclude(start, Some(end), digit_count))
+                        }
                         (false, true) => specs.push(RangeSpec::Exclude(start, Some(end))),
                         (false, false) => specs.push(RangeSpec::Include(start, Some(end))),
                     }
@@ -113,7 +121,7 @@ pub fn parse_range_specifications(input: &str) -> Vec<RangeSpec> {
             }
         } else if let Ok(num) = range_str.parse::<i32>() {
             let digit_count = if is_relative { range_str.len() } else { 0 };
-            
+
             match (is_relative, is_exclude) {
                 (true, true) => specs.push(RangeSpec::RelativeExclude(num, None, digit_count)),
                 (true, false) => specs.push(RangeSpec::RelativeInclude(num, None, digit_count)),
@@ -442,11 +450,11 @@ mod tests {
         // Test 2 digits
         let specs = parse_range_specifications("?24");
         assert_eq!(specs, vec![RangeSpec::RelativeInclude(24, None, 2)]);
-        
+
         // Test 4 digits
         let specs = parse_range_specifications("?1234");
         assert_eq!(specs, vec![RangeSpec::RelativeInclude(1234, None, 4)]);
-        
+
         // Test mixed digits
         let specs = parse_range_specifications("?24,?324,?1234");
         assert_eq!(
@@ -463,22 +471,22 @@ mod tests {
     fn test_calculate_relative_with_different_digits() {
         // Test with max 123456 and different digit counts
         let max_post = 123456;
-        
+
         // ?56 with 2 digits: 123456 / 100 * 100 + 56 = 123456
         let specs = vec![RangeSpec::RelativeInclude(56, None, 2)];
         let result = calculate_post_numbers(specs, max_post);
         assert_eq!(result, vec![123456]);
-        
+
         // ?456 with 3 digits: 123456 / 1000 * 1000 + 456 = 123456
         let specs = vec![RangeSpec::RelativeInclude(456, None, 3)];
         let result = calculate_post_numbers(specs, max_post);
         assert_eq!(result, vec![123456]);
-        
+
         // ?3456 with 4 digits: 123456 / 10000 * 10000 + 3456 = 123456
         let specs = vec![RangeSpec::RelativeInclude(3456, None, 4)];
         let result = calculate_post_numbers(specs, max_post);
         assert_eq!(result, vec![123456]);
-        
+
         // Test with different values
         // ?24 with 2 digits: 123456 / 100 * 100 + 24 = 123424
         let specs = vec![RangeSpec::RelativeInclude(24, None, 2)];
