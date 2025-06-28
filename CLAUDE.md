@@ -31,6 +31,20 @@ cargo fmt
 cargo clippy
 ```
 
+## Commit Guidelines
+
+Before committing any changes, always run the following commands to ensure code quality:
+
+```bash
+# Format code
+cargo fmt
+
+# Run clippy to check for common mistakes and improve code
+cargo clippy
+```
+
+If these commands report any issues, fix them before committing. This helps maintain consistent code style and prevents CI failures.
+
 ## Architecture
 
 ### Core Components
