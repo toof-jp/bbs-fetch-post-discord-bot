@@ -1,166 +1,23 @@
-use std::collections::HashSet;
+use std::env;
 use std::sync::Arc;
-use std::{env, fmt};
 
 use anyhow::Result;
-use chrono::NaiveDateTime;
+use bbs_fetch_post_discord_bot::{
+    calculate_post_numbers, get_max_post_number, get_res_by_numbers, parse_range_specifications,
+    RangeSpec,
+};
 use regex::Regex;
-use serde::Serialize;
 use serenity::async_trait;
+use serenity::builder::{CreateEmbed, CreateMessage};
 use serenity::model::channel::Message;
 use serenity::model::gateway::Ready;
 use serenity::prelude::*;
 use sqlx::postgres::PgPool;
-use sqlx::FromRow;
-
-#[derive(Debug, Default, Serialize, FromRow)]
-pub struct Res {
-    pub no: i32,
-    pub name_and_trip: String,
-    pub datetime: NaiveDateTime,
-    pub datetime_text: String,
-    pub id: String,
-    pub main_text: String,
-    pub main_text_html: String,
-    pub oekaki_id: Option<i32>,
-}
-
-impl fmt::Display for Res {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "### __{} {} {} ID: {}__\n{}\n",
-            self.no, self.name_and_trip, self.datetime_text, self.id, self.main_text
-        )
-    }
-}
-
-async fn get_res_by_numbers(pool: &PgPool, numbers: Vec<i32>) -> Result<Vec<Res>> {
-    if numbers.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    let query = "SELECT * FROM res WHERE no = ANY($1) ORDER BY no ASC";
-
-    sqlx::query_as::<_, Res>(query)
-        .bind(&numbers)
-        .fetch_all(pool)
-        .await
-        .map_err(Into::into)
-}
-
-async fn get_max_post_number(pool: &PgPool) -> Result<i32> {
-    let query = "SELECT MAX(no) FROM res";
-
-    let row: (Option<i32>,) = sqlx::query_as(query).fetch_one(pool).await?;
-
-    Ok(row.0.unwrap_or(0))
-}
-
-#[derive(Debug)]
-enum RangeSpec {
-    Include(i32, Option<i32>),
-    Exclude(i32, Option<i32>),
-    IncludeFrom(i32), // For open-ended ranges like "123-"
-    ExcludeFrom(i32), // For open-ended exclusions like "^123-"
-}
-
-fn parse_range_specifications(input: &str) -> Vec<RangeSpec> {
-    let mut specs = Vec::new();
-    let parts: Vec<&str> = input.split(',').collect();
-
-    for part in parts {
-        let trimmed = part.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-
-        let (is_exclude, range_str) = if trimmed.starts_with('^') {
-            (true, &trimmed[1..])
-        } else {
-            (false, trimmed)
-        };
-
-        if let Some(dash_pos) = range_str.find('-') {
-            let start_str = &range_str[..dash_pos];
-            let end_str = &range_str[dash_pos + 1..];
-
-            if let Ok(start) = start_str.parse::<i32>() {
-                if end_str.is_empty() {
-                    // Open-ended range like "123-"
-                    if is_exclude {
-                        specs.push(RangeSpec::ExcludeFrom(start));
-                    } else {
-                        specs.push(RangeSpec::IncludeFrom(start));
-                    }
-                } else if let Ok(end) = end_str.parse::<i32>() {
-                    // Closed range like "123-456"
-                    if is_exclude {
-                        specs.push(RangeSpec::Exclude(start, Some(end)));
-                    } else {
-                        specs.push(RangeSpec::Include(start, Some(end)));
-                    }
-                }
-            }
-        } else if let Ok(num) = range_str.parse::<i32>() {
-            if is_exclude {
-                specs.push(RangeSpec::Exclude(num, None));
-            } else {
-                specs.push(RangeSpec::Include(num, None));
-            }
-        }
-    }
-
-    specs
-}
-
-fn calculate_post_numbers(specs: Vec<RangeSpec>, max_post_number: i32) -> Vec<i32> {
-    let mut included = HashSet::new();
-    let mut excluded = HashSet::new();
-
-    for spec in specs {
-        match spec {
-            RangeSpec::Include(start, end) => {
-                if let Some(end_num) = end {
-                    for i in start..=end_num {
-                        included.insert(i);
-                    }
-                } else {
-                    included.insert(start);
-                }
-            }
-            RangeSpec::IncludeFrom(start) => {
-                // Include all posts from start to max_post_number
-                for i in start..=max_post_number {
-                    included.insert(i);
-                }
-            }
-            RangeSpec::Exclude(start, end) => {
-                if let Some(end_num) = end {
-                    for i in start..=end_num {
-                        excluded.insert(i);
-                    }
-                } else {
-                    excluded.insert(start);
-                }
-            }
-            RangeSpec::ExcludeFrom(start) => {
-                // Exclude all posts from start to max_post_number
-                for i in start..=max_post_number {
-                    excluded.insert(i);
-                }
-            }
-        }
-    }
-
-    let mut result: Vec<i32> = included.difference(&excluded).cloned().collect();
-    result.sort();
-    result
-}
 
 #[derive(Clone)]
 struct Bot {
     pool: Arc<PgPool>,
+    image_url_prefix: String,
 }
 
 #[async_trait]
@@ -182,30 +39,38 @@ impl EventHandler for Bot {
             if let Err(e) = msg
                 .reply(
                     &ctx.http,
-                    "使い方: @bot 123 または @bot 123-128 または @bot 123- または @bot 123,124-128,^126-127",
+                    "使い方: @bot 123 または @bot 123-128 または @bot 123- または @bot 123,124-128,^126-127 または @bot ?324,?324-326,?^325",
                 )
                 .await
             {
-                eprintln!("Error sending message: {:?}", e);
+                eprintln!("Error sending message: {e:?}");
             }
             return;
         }
 
         // Check if any spec requires max post number
-        let needs_max = specs
-            .iter()
-            .any(|spec| matches!(spec, RangeSpec::IncludeFrom(_) | RangeSpec::ExcludeFrom(_)));
+        let needs_max = specs.iter().any(|spec| {
+            matches!(
+                spec,
+                RangeSpec::IncludeFrom(_)
+                    | RangeSpec::ExcludeFrom(_)
+                    | RangeSpec::RelativeInclude(_, _)
+                    | RangeSpec::RelativeExclude(_, _)
+                    | RangeSpec::RelativeIncludeFrom(_)
+                    | RangeSpec::RelativeExcludeFrom(_)
+            )
+        });
 
         let max_post_number = if needs_max {
             match get_max_post_number(&self.pool).await {
                 Ok(max) => max,
                 Err(e) => {
-                    eprintln!("Error getting max post number: {:?}", e);
+                    eprintln!("Error getting max post number: {e:?}");
                     if let Err(e) = msg
                         .reply(&ctx.http, "データベースエラーが発生しました。")
                         .await
                     {
-                        eprintln!("Error sending message: {:?}", e);
+                        eprintln!("Error sending message: {e:?}");
                     }
                     return;
                 }
@@ -221,7 +86,7 @@ impl EventHandler for Bot {
                 .reply(&ctx.http, "指定された範囲には表示するレスがありません。")
                 .await
             {
-                eprintln!("Error sending message: {:?}", e);
+                eprintln!("Error sending message: {e:?}");
             }
             return;
         }
@@ -233,30 +98,65 @@ impl EventHandler for Bot {
                         .reply(&ctx.http, "指定された範囲のレスが見つかりませんでした。")
                         .await
                     {
-                        eprintln!("Error sending message: {:?}", e);
+                        eprintln!("Error sending message: {e:?}");
                     }
                 } else {
-                    let mut response = String::new();
+                    // Send posts with images if they have oekaki_id
+                    let mut current_message = String::new();
+
                     for post in posts.iter() {
-                        response.push_str(&format!("{}", post));
-                        if response.len() > 1800 {
-                            response.push_str("...(表示制限により省略)");
-                            break;
+                        let post_text = format!("{post}");
+
+                        // Check if adding this post would exceed Discord's limit
+                        if !current_message.is_empty()
+                            && current_message.len() + post_text.len() > 1800
+                        {
+                            // Send the current batch
+                            if let Err(e) = msg.reply(&ctx.http, &current_message).await {
+                                eprintln!("Error sending message: {e:?}");
+                            }
+                            current_message.clear();
+                        }
+
+                        current_message.push_str(&post_text);
+
+                        // Send image if oekaki_id exists
+                        if let Some(oekaki_id) = post.oekaki_id {
+                            // Send current text if any
+                            if !current_message.is_empty() {
+                                if let Err(e) = msg.reply(&ctx.http, &current_message).await {
+                                    eprintln!("Error sending message: {e:?}");
+                                }
+                                current_message.clear();
+                            }
+
+                            // Send image as embed
+                            let image_url = format!("{}{}.png", self.image_url_prefix, oekaki_id);
+                            let builder = CreateMessage::new()
+                                .reference_message(&msg)
+                                .embed(CreateEmbed::new().image(image_url));
+
+                            if let Err(e) = msg.channel_id.send_message(&ctx.http, builder).await {
+                                eprintln!("Error sending image: {e:?}");
+                            }
                         }
                     }
 
-                    if let Err(e) = msg.reply(&ctx.http, response).await {
-                        eprintln!("Error sending message: {:?}", e);
+                    // Send any remaining text
+                    if !current_message.is_empty() {
+                        if let Err(e) = msg.reply(&ctx.http, current_message).await {
+                            eprintln!("Error sending message: {e:?}");
+                        }
                     }
                 }
             }
             Err(e) => {
-                eprintln!("Database error: {:?}", e);
+                eprintln!("Database error: {e:?}");
                 if let Err(e) = msg
                     .reply(&ctx.http, "データベースエラーが発生しました。")
                     .await
                 {
-                    eprintln!("Error sending message: {:?}", e);
+                    eprintln!("Error sending message: {e:?}");
                 }
             }
         }
@@ -273,11 +173,14 @@ async fn main() -> Result<()> {
 
     let discord_token = env::var("DISCORD_TOKEN").expect("Expected DISCORD_TOKEN in environment");
     let database_url = env::var("DATABASE_URL").expect("Expected DATABASE_URL in environment");
+    let image_url_prefix =
+        env::var("IMAGE_URL_PREFIX").expect("Expected IMAGE_URL_PREFIX in environment");
 
     let pool = PgPool::connect(&database_url).await?;
 
     let bot = Bot {
         pool: Arc::new(pool),
+        image_url_prefix,
     };
 
     let intents = GatewayIntents::GUILD_MESSAGES
@@ -290,7 +193,7 @@ async fn main() -> Result<()> {
         .expect("Error creating client");
 
     if let Err(why) = client.start().await {
-        eprintln!("Client error: {:?}", why);
+        eprintln!("Client error: {why:?}");
     }
 
     Ok(())
