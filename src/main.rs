@@ -54,10 +54,10 @@ impl EventHandler for Bot {
                 spec,
                 RangeSpec::IncludeFrom(_)
                     | RangeSpec::ExcludeFrom(_)
-                    | RangeSpec::RelativeInclude(_, _)
-                    | RangeSpec::RelativeExclude(_, _)
-                    | RangeSpec::RelativeIncludeFrom(_)
-                    | RangeSpec::RelativeExcludeFrom(_)
+                    | RangeSpec::RelativeInclude(_, _, _)
+                    | RangeSpec::RelativeExclude(_, _, _)
+                    | RangeSpec::RelativeIncludeFrom(_, _)
+                    | RangeSpec::RelativeExcludeFrom(_, _)
             )
         });
 
