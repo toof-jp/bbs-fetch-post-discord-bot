@@ -35,31 +35,20 @@ pub async fn get_res_by_numbers(pool: &PgPool, numbers: Vec<i32>) -> Result<Vec<
     }
 
     let query = "SELECT * FROM res WHERE no = ANY($1) ORDER BY no ASC";
-    eprintln!("DEBUG: get_res_by_numbers: querying for numbers: {:?}", numbers);
 
-    let result = sqlx::query_as::<_, Res>(query)
+    sqlx::query_as::<_, Res>(query)
         .bind(&numbers)
         .fetch_all(pool)
         .await
-        .map_err(Into::into);
-    
-    match &result {
-        Ok(posts) => eprintln!("DEBUG: get_res_by_numbers: found {} posts", posts.len()),
-        Err(e) => eprintln!("DEBUG: get_res_by_numbers: error: {:?}", e),
-    }
-    
-    result
+        .map_err(Into::into)
 }
 
 pub async fn get_max_post_number(pool: &PgPool) -> Result<i32> {
     let query = "SELECT MAX(no) FROM res";
-    eprintln!("DEBUG: get_max_post_number: executing query");
 
     let row: (Option<i32>,) = sqlx::query_as(query).fetch_one(pool).await?;
-    let max = row.0.unwrap_or(0);
-    eprintln!("DEBUG: get_max_post_number: result = {}", max);
 
-    Ok(max)
+    Ok(row.0.unwrap_or(0))
 }
 
 #[derive(Debug, PartialEq)]
@@ -160,7 +149,7 @@ pub fn calculate_post_numbers(specs: Vec<RangeSpec>, max_post_number: i32) -> Ve
         let candidate = base + relative_num;
         
         // If the candidate exceeds max, go to previous base
-        let result = if candidate > max_post_number {
+        if candidate > max_post_number {
             let prev_base = base - divisor;
             if prev_base >= 0 {
                 prev_base + relative_num
@@ -169,12 +158,7 @@ pub fn calculate_post_numbers(specs: Vec<RangeSpec>, max_post_number: i32) -> Ve
             }
         } else {
             candidate
-        };
-        
-        eprintln!("DEBUG: calculate_absolute: max={}, relative={}, digits={}, divisor={}, base={}, candidate={}, result={}", 
-                 max_post_number, relative_num, digit_count, divisor, base, candidate, result);
-        
-        result
+        }
     };
 
     for spec in specs {
@@ -212,8 +196,6 @@ pub fn calculate_post_numbers(specs: Vec<RangeSpec>, max_post_number: i32) -> Ve
             // Relative references
             RangeSpec::RelativeInclude(start, end, digit_count) => {
                 let abs_start = calculate_absolute(start, digit_count);
-                eprintln!("DEBUG: RelativeInclude: start={}, end={:?}, digits={}, abs_start={}", 
-                         start, end, digit_count, abs_start);
                 if let Some(end_num) = end {
                     let abs_end = calculate_absolute(end_num, digit_count);
                     for i in abs_start..=abs_end {

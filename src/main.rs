@@ -34,7 +34,6 @@ impl EventHandler for Bot {
 
         // Parse range specifications
         let specs = parse_range_specifications(&cleaned_content);
-        eprintln!("DEBUG: Input: '{}', Parsed specs: {:?}", cleaned_content, specs);
 
         if specs.is_empty() {
             if let Err(e) = msg
@@ -64,10 +63,7 @@ impl EventHandler for Bot {
 
         let max_post_number = if needs_max {
             match get_max_post_number(&self.pool).await {
-                Ok(max) => {
-                    eprintln!("DEBUG: Got max post number: {}", max);
-                    max
-                }
+                Ok(max) => max,
                 Err(e) => {
                     eprintln!("Error getting max post number: {e:?}");
                     if let Err(e) = msg
@@ -84,7 +80,6 @@ impl EventHandler for Bot {
         };
 
         let post_numbers = calculate_post_numbers(specs, max_post_number);
-        eprintln!("DEBUG: Calculated post numbers: {:?}", post_numbers);
 
         if post_numbers.is_empty() {
             if let Err(e) = msg
@@ -96,9 +91,8 @@ impl EventHandler for Bot {
             return;
         }
 
-        match get_res_by_numbers(&self.pool, post_numbers.clone()).await {
+        match get_res_by_numbers(&self.pool, post_numbers).await {
             Ok(posts) => {
-                eprintln!("DEBUG: Found {} posts for numbers {:?}", posts.len(), post_numbers);
                 if posts.is_empty() {
                     if let Err(e) = msg
                         .reply(&ctx.http, "指定された範囲のレスが見つかりませんでした。")
