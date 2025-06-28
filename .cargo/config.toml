@@ -1,0 +1,3 @@
+[env]
+SQLX_NO_MYSQL = "1"
+SQLX_NO_SQLITE = "1"

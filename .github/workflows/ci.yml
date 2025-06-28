@@ -88,3 +88,6 @@ jobs:
       uses: rustsec/audit-check@v1
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
+        # Ignore RUSTSEC-2023-0071 (rsa) - Cannot be fixed due to sqlx-macros requiring all DB backends
+        # See: https://github.com/launchbadge/sqlx/issues/2911
+        args: --ignore RUSTSEC-2023-0071
