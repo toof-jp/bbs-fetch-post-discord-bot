@@ -74,14 +74,14 @@ pub fn parse_range_specifications(input: &str) -> Vec<RangeSpec> {
             continue;
         }
 
-        let (is_relative, range_str) = if trimmed.starts_with('?') {
-            (true, &trimmed[1..])
+        let (is_relative, range_str) = if let Some(stripped) = trimmed.strip_prefix('?') {
+            (true, stripped)
         } else {
             (false, trimmed)
         };
 
-        let (is_exclude, range_str) = if range_str.starts_with('^') {
-            (true, &range_str[1..])
+        let (is_exclude, range_str) = if let Some(stripped) = range_str.strip_prefix('^') {
+            (true, stripped)
         } else {
             (false, range_str)
         };

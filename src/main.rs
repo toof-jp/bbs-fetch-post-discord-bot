@@ -43,7 +43,7 @@ impl EventHandler for Bot {
                 )
                 .await
             {
-                eprintln!("Error sending message: {:?}", e);
+                eprintln!("Error sending message: {e:?}");
             }
             return;
         }
@@ -65,12 +65,12 @@ impl EventHandler for Bot {
             match get_max_post_number(&self.pool).await {
                 Ok(max) => max,
                 Err(e) => {
-                    eprintln!("Error getting max post number: {:?}", e);
+                    eprintln!("Error getting max post number: {e:?}");
                     if let Err(e) = msg
                         .reply(&ctx.http, "データベースエラーが発生しました。")
                         .await
                     {
-                        eprintln!("Error sending message: {:?}", e);
+                        eprintln!("Error sending message: {e:?}");
                     }
                     return;
                 }
@@ -86,7 +86,7 @@ impl EventHandler for Bot {
                 .reply(&ctx.http, "指定された範囲には表示するレスがありません。")
                 .await
             {
-                eprintln!("Error sending message: {:?}", e);
+                eprintln!("Error sending message: {e:?}");
             }
             return;
         }
@@ -98,14 +98,14 @@ impl EventHandler for Bot {
                         .reply(&ctx.http, "指定された範囲のレスが見つかりませんでした。")
                         .await
                     {
-                        eprintln!("Error sending message: {:?}", e);
+                        eprintln!("Error sending message: {e:?}");
                     }
                 } else {
                     // Send posts with images if they have oekaki_id
                     let mut current_message = String::new();
 
                     for post in posts.iter() {
-                        let post_text = format!("{}", post);
+                        let post_text = format!("{post}");
 
                         // Check if adding this post would exceed Discord's limit
                         if !current_message.is_empty()
@@ -113,7 +113,7 @@ impl EventHandler for Bot {
                         {
                             // Send the current batch
                             if let Err(e) = msg.reply(&ctx.http, &current_message).await {
-                                eprintln!("Error sending message: {:?}", e);
+                                eprintln!("Error sending message: {e:?}");
                             }
                             current_message.clear();
                         }
@@ -125,7 +125,7 @@ impl EventHandler for Bot {
                             // Send current text if any
                             if !current_message.is_empty() {
                                 if let Err(e) = msg.reply(&ctx.http, &current_message).await {
-                                    eprintln!("Error sending message: {:?}", e);
+                                    eprintln!("Error sending message: {e:?}");
                                 }
                                 current_message.clear();
                             }
@@ -137,7 +137,7 @@ impl EventHandler for Bot {
                                 .embed(CreateEmbed::new().image(image_url));
 
                             if let Err(e) = msg.channel_id.send_message(&ctx.http, builder).await {
-                                eprintln!("Error sending image: {:?}", e);
+                                eprintln!("Error sending image: {e:?}");
                             }
                         }
                     }
@@ -145,18 +145,18 @@ impl EventHandler for Bot {
                     // Send any remaining text
                     if !current_message.is_empty() {
                         if let Err(e) = msg.reply(&ctx.http, current_message).await {
-                            eprintln!("Error sending message: {:?}", e);
+                            eprintln!("Error sending message: {e:?}");
                         }
                     }
                 }
             }
             Err(e) => {
-                eprintln!("Database error: {:?}", e);
+                eprintln!("Database error: {e:?}");
                 if let Err(e) = msg
                     .reply(&ctx.http, "データベースエラーが発生しました。")
                     .await
                 {
-                    eprintln!("Error sending message: {:?}", e);
+                    eprintln!("Error sending message: {e:?}");
                 }
             }
         }
@@ -193,7 +193,7 @@ async fn main() -> Result<()> {
         .expect("Error creating client");
 
     if let Err(why) = client.start().await {
-        eprintln!("Client error: {:?}", why);
+        eprintln!("Client error: {why:?}");
     }
 
     Ok(())
