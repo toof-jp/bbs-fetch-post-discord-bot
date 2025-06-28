@@ -224,6 +224,28 @@ CREATE TABLE res (
 DISCORD_TOKEN=your_discord_bot_token
 DATABASE_URL=postgresql://username:password@host:port/database
 IMAGE_URL_PREFIX=https://example.com/images/
+
+# ログレベル設定（オプション）
+# 設定可能な値: error, warn, info, debug, trace
+# デフォルト: info
+RUST_LOG=info
+```
+
+### ログレベルの設定
+
+`RUST_LOG`環境変数でログの詳細度を制御できます：
+
+- `RUST_LOG=error`: エラーのみ表示
+- `RUST_LOG=warn`: 警告とエラーを表示
+- `RUST_LOG=info`: 情報、警告、エラーを表示（デフォルト）
+- `RUST_LOG=debug`: デバッグ情報を含むすべてのログを表示
+- `RUST_LOG=trace`: 最も詳細なログを表示
+
+特定のモジュールのログレベルを個別に設定することも可能です：
+
+```env
+# botのデバッグログを表示し、serenityは情報レベルのみ
+RUST_LOG=bbs_fetch_post_discord_bot=debug,serenity=info
 ```
 
 ## 依存関係
