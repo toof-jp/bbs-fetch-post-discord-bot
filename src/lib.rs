@@ -35,20 +35,31 @@ pub async fn get_res_by_numbers(pool: &PgPool, numbers: Vec<i32>) -> Result<Vec<
     }
 
     let query = "SELECT * FROM res WHERE no = ANY($1) ORDER BY no ASC";
+    eprintln!("DEBUG: get_res_by_numbers: querying for numbers: {:?}", numbers);
 
-    sqlx::query_as::<_, Res>(query)
+    let result = sqlx::query_as::<_, Res>(query)
         .bind(&numbers)
         .fetch_all(pool)
         .await
-        .map_err(Into::into)
+        .map_err(Into::into);
+    
+    match &result {
+        Ok(posts) => eprintln!("DEBUG: get_res_by_numbers: found {} posts", posts.len()),
+        Err(e) => eprintln!("DEBUG: get_res_by_numbers: error: {:?}", e),
+    }
+    
+    result
 }
 
 pub async fn get_max_post_number(pool: &PgPool) -> Result<i32> {
     let query = "SELECT MAX(no) FROM res";
+    eprintln!("DEBUG: get_max_post_number: executing query");
 
     let row: (Option<i32>,) = sqlx::query_as(query).fetch_one(pool).await?;
+    let max = row.0.unwrap_or(0);
+    eprintln!("DEBUG: get_max_post_number: result = {}", max);
 
-    Ok(row.0.unwrap_or(0))
+    Ok(max)
 }
 
 #[derive(Debug, PartialEq)]
@@ -144,8 +155,13 @@ pub fn calculate_post_numbers(specs: Vec<RangeSpec>, max_post_number: i32) -> Ve
             let max_digits = max_post_number.to_string().len();
             if max_digits > digit_count {
                 let divisor = 10_i32.pow(digit_count as u32);
-                (max_post_number / divisor) * divisor
+                let base = (max_post_number / divisor) * divisor;
+                eprintln!("DEBUG: calculate_base: max={}, digits={}, divisor={}, base={}", 
+                         max_post_number, digit_count, divisor, base);
+                base
             } else {
+                eprintln!("DEBUG: calculate_base: max={} has {} digits, less than requested {}", 
+                         max_post_number, max_digits, digit_count);
                 0
             }
         } else {
@@ -189,6 +205,8 @@ pub fn calculate_post_numbers(specs: Vec<RangeSpec>, max_post_number: i32) -> Ve
             RangeSpec::RelativeInclude(start, end, digit_count) => {
                 let base = calculate_base(digit_count);
                 let abs_start = base + start;
+                eprintln!("DEBUG: RelativeInclude: start={}, end={:?}, digits={}, base={}, abs_start={}", 
+                         start, end, digit_count, base, abs_start);
                 if let Some(end_num) = end {
                     let abs_end = base + end_num;
                     for i in abs_start..=abs_end {
