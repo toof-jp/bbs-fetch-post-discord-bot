@@ -143,11 +143,11 @@ pub fn calculate_post_numbers(specs: Vec<RangeSpec>, max_post_number: i32) -> Ve
         if max_post_number <= 0 {
             return relative_num;
         }
-        
+
         let divisor = 10_i32.pow(digit_count as u32);
         let base = (max_post_number / divisor) * divisor;
         let candidate = base + relative_num;
-        
+
         // If the candidate exceeds max, go to previous base
         if candidate > max_post_number {
             let prev_base = base - divisor;
@@ -502,30 +502,30 @@ mod tests {
     fn test_calculate_relative_with_wraparound() {
         // Test the specific case mentioned: max 2345, ?456 should return 1456
         let max_post = 2345;
-        
+
         // ?456 with max 2345: since 2456 > 2345, should wrap to 1456
         let specs = vec![RangeSpec::RelativeInclude(456, None, 3)];
         let result = calculate_post_numbers(specs, max_post);
         assert_eq!(result, vec![1456]);
-        
+
         // ?345 with max 2345: should return 2345 (exact match)
         let specs = vec![RangeSpec::RelativeInclude(345, None, 3)];
         let result = calculate_post_numbers(specs, max_post);
         assert_eq!(result, vec![2345]);
-        
+
         // ?100 with max 2345: should return 2100
         let specs = vec![RangeSpec::RelativeInclude(100, None, 3)];
         let result = calculate_post_numbers(specs, max_post);
         assert_eq!(result, vec![2100]);
-        
+
         // Test with smaller max
         let max_post = 456;
-        
+
         // ?456 with max 456: should return 456 (exact match)
         let specs = vec![RangeSpec::RelativeInclude(456, None, 3)];
         let result = calculate_post_numbers(specs, max_post);
         assert_eq!(result, vec![456]);
-        
+
         // ?500 with max 456: since we can't go negative, should return 500
         let specs = vec![RangeSpec::RelativeInclude(500, None, 3)];
         let result = calculate_post_numbers(specs, max_post);
