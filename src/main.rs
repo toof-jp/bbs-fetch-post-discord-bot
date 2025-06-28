@@ -6,6 +6,7 @@ use bbs_fetch_post_discord_bot::{
     calculate_post_numbers, get_max_post_number, get_res_by_numbers, parse_range_specifications,
     RangeSpec,
 };
+use log::{debug, error, info};
 use regex::Regex;
 use serenity::async_trait;
 use serenity::builder::{CreateEmbed, CreateMessage};
@@ -34,10 +35,7 @@ impl EventHandler for Bot {
 
         // Parse range specifications
         let specs = parse_range_specifications(&cleaned_content);
-        eprintln!(
-            "DEBUG: Input: '{}', Parsed specs: {:?}",
-            cleaned_content, specs
-        );
+        debug!("Input: '{}', Parsed specs: {:?}", cleaned_content, specs);
 
         if specs.is_empty() {
             if let Err(e) = msg
@@ -47,14 +45,14 @@ impl EventHandler for Bot {
                 )
                 .await
             {
-                eprintln!("Error sending message: {e:?}");
+                error!("Error sending message: {e:?}");
             }
             return;
         }
 
         // Check if any spec requires max post number
         let needs_max = specs.iter().any(|spec| {
-            eprintln!("DEBUG: Checking spec {:?} for needs_max", spec);
+            debug!("Checking spec {:?} for needs_max", spec);
             matches!(
                 spec,
                 RangeSpec::IncludeFrom(_)
@@ -65,21 +63,21 @@ impl EventHandler for Bot {
                     | RangeSpec::RelativeExcludeFrom(_, _)
             )
         });
-        eprintln!("DEBUG: needs_max = {}", needs_max);
+        debug!("needs_max = {}", needs_max);
 
         let max_post_number = if needs_max {
             match get_max_post_number(&self.pool).await {
                 Ok(max) => {
-                    eprintln!("DEBUG: Got max post number: {}", max);
+                    debug!("Got max post number: {}", max);
                     max
                 }
                 Err(e) => {
-                    eprintln!("Error getting max post number: {e:?}");
+                    error!("Error getting max post number: {e:?}");
                     if let Err(e) = msg
                         .reply(&ctx.http, "データベースエラーが発生しました。")
                         .await
                     {
-                        eprintln!("Error sending message: {e:?}");
+                        error!("Error sending message: {e:?}");
                     }
                     return;
                 }
@@ -89,31 +87,27 @@ impl EventHandler for Bot {
         };
 
         let post_numbers = calculate_post_numbers(specs, max_post_number);
-        eprintln!("DEBUG: Calculated post numbers: {:?}", post_numbers);
+        debug!("Calculated post numbers: {:?}", post_numbers);
 
         if post_numbers.is_empty() {
             if let Err(e) = msg
                 .reply(&ctx.http, "指定された範囲には表示するレスがありません。")
                 .await
             {
-                eprintln!("Error sending message: {e:?}");
+                error!("Error sending message: {e:?}");
             }
             return;
         }
 
         match get_res_by_numbers(&self.pool, post_numbers.clone()).await {
             Ok(posts) => {
-                eprintln!(
-                    "DEBUG: Got {} posts for numbers {:?}",
-                    posts.len(),
-                    post_numbers
-                );
+                debug!("Got {} posts for numbers {:?}", posts.len(), post_numbers);
                 if posts.is_empty() {
                     if let Err(e) = msg
                         .reply(&ctx.http, "指定された範囲のレスが見つかりませんでした。")
                         .await
                     {
-                        eprintln!("Error sending message: {e:?}");
+                        error!("Error sending message: {e:?}");
                     }
                 } else {
                     // Send posts with images if they have oekaki_id
@@ -128,7 +122,7 @@ impl EventHandler for Bot {
                         {
                             // Send the current batch
                             if let Err(e) = msg.reply(&ctx.http, &current_message).await {
-                                eprintln!("Error sending message: {e:?}");
+                                error!("Error sending message: {e:?}");
                             }
                             current_message.clear();
                         }
@@ -140,7 +134,7 @@ impl EventHandler for Bot {
                             // Send current text if any
                             if !current_message.is_empty() {
                                 if let Err(e) = msg.reply(&ctx.http, &current_message).await {
-                                    eprintln!("Error sending message: {e:?}");
+                                    error!("Error sending message: {e:?}");
                                 }
                                 current_message.clear();
                             }
@@ -160,31 +154,34 @@ impl EventHandler for Bot {
                     // Send any remaining text
                     if !current_message.is_empty() {
                         if let Err(e) = msg.reply(&ctx.http, current_message).await {
-                            eprintln!("Error sending message: {e:?}");
+                            error!("Error sending message: {e:?}");
                         }
                     }
                 }
             }
             Err(e) => {
-                eprintln!("Database error: {e:?}");
+                error!("Database error: {e:?}");
                 if let Err(e) = msg
                     .reply(&ctx.http, "データベースエラーが発生しました。")
                     .await
                 {
-                    eprintln!("Error sending message: {e:?}");
+                    error!("Error sending message: {e:?}");
                 }
             }
         }
     }
 
     async fn ready(&self, _: Context, ready: Ready) {
-        println!("{} is connected!", ready.user.name);
+        info!("{} is connected!", ready.user.name);
     }
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenvy::dotenv().expect("Failed to load .env file");
+
+    // Initialize logger with RUST_LOG environment variable
+    env_logger::init();
 
     let discord_token = env::var("DISCORD_TOKEN").expect("Expected DISCORD_TOKEN in environment");
     let database_url = env::var("DATABASE_URL").expect("Expected DATABASE_URL in environment");
@@ -208,7 +205,7 @@ async fn main() -> Result<()> {
         .expect("Error creating client");
 
     if let Err(why) = client.start().await {
-        eprintln!("Client error: {why:?}");
+        error!("Client error: {why:?}");
     }
 
     Ok(())
