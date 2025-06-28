@@ -31,24 +31,39 @@ impl fmt::Display for Res {
 
 pub async fn get_res_by_numbers(pool: &PgPool, numbers: Vec<i32>) -> Result<Vec<Res>> {
     if numbers.is_empty() {
+        eprintln!("DEBUG: get_res_by_numbers: empty numbers array");
         return Ok(Vec::new());
     }
 
     let query = "SELECT * FROM res WHERE no = ANY($1) ORDER BY no ASC";
+    eprintln!(
+        "DEBUG: get_res_by_numbers: querying for numbers: {:?}",
+        numbers
+    );
 
-    sqlx::query_as::<_, Res>(query)
+    let result = sqlx::query_as::<_, Res>(query)
         .bind(&numbers)
         .fetch_all(pool)
         .await
-        .map_err(Into::into)
+        .map_err(Into::into);
+
+    match &result {
+        Ok(posts) => eprintln!("DEBUG: get_res_by_numbers: found {} posts", posts.len()),
+        Err(e) => eprintln!("DEBUG: get_res_by_numbers: error: {:?}", e),
+    }
+
+    result
 }
 
 pub async fn get_max_post_number(pool: &PgPool) -> Result<i32> {
     let query = "SELECT MAX(no) FROM res";
+    eprintln!("DEBUG: get_max_post_number: executing query");
 
     let row: (Option<i32>,) = sqlx::query_as(query).fetch_one(pool).await?;
+    let result = row.0.unwrap_or(0);
+    eprintln!("DEBUG: get_max_post_number: result = {}", result);
 
-    Ok(row.0.unwrap_or(0))
+    Ok(result)
 }
 
 #[derive(Debug, PartialEq)]
@@ -135,6 +150,10 @@ pub fn parse_range_specifications(input: &str) -> Vec<RangeSpec> {
 }
 
 pub fn calculate_post_numbers(specs: Vec<RangeSpec>, max_post_number: i32) -> Vec<i32> {
+    eprintln!(
+        "DEBUG: calculate_post_numbers called with specs: {:?}, max_post_number: {}",
+        specs, max_post_number
+    );
     let mut included = HashSet::new();
     let mut excluded = HashSet::new();
 
@@ -149,7 +168,7 @@ pub fn calculate_post_numbers(specs: Vec<RangeSpec>, max_post_number: i32) -> Ve
         let candidate = base + relative_num;
 
         // If the candidate exceeds max, go to previous base
-        if candidate > max_post_number {
+        let result = if candidate > max_post_number {
             let prev_base = base - divisor;
             if prev_base >= 0 {
                 prev_base + relative_num
@@ -158,7 +177,12 @@ pub fn calculate_post_numbers(specs: Vec<RangeSpec>, max_post_number: i32) -> Ve
             }
         } else {
             candidate
-        }
+        };
+
+        eprintln!("DEBUG: calculate_absolute: max={}, relative={}, digits={}, divisor={}, base={}, candidate={}, result={}", 
+                 max_post_number, relative_num, digit_count, divisor, base, candidate, result);
+
+        result
     };
 
     for spec in specs {
@@ -195,13 +219,19 @@ pub fn calculate_post_numbers(specs: Vec<RangeSpec>, max_post_number: i32) -> Ve
             }
             // Relative references
             RangeSpec::RelativeInclude(start, end, digit_count) => {
+                eprintln!(
+                    "DEBUG: Processing RelativeInclude: start={}, end={:?}, digit_count={}",
+                    start, end, digit_count
+                );
                 let abs_start = calculate_absolute(start, digit_count);
                 if let Some(end_num) = end {
                     let abs_end = calculate_absolute(end_num, digit_count);
+                    eprintln!("DEBUG: Including range {}..={}", abs_start, abs_end);
                     for i in abs_start..=abs_end {
                         included.insert(i);
                     }
                 } else {
+                    eprintln!("DEBUG: Including single number {}", abs_start);
                     included.insert(abs_start);
                 }
             }
@@ -212,13 +242,19 @@ pub fn calculate_post_numbers(specs: Vec<RangeSpec>, max_post_number: i32) -> Ve
                 }
             }
             RangeSpec::RelativeExclude(start, end, digit_count) => {
+                eprintln!(
+                    "DEBUG: Processing RelativeExclude: start={}, end={:?}, digit_count={}",
+                    start, end, digit_count
+                );
                 let abs_start = calculate_absolute(start, digit_count);
                 if let Some(end_num) = end {
                     let abs_end = calculate_absolute(end_num, digit_count);
+                    eprintln!("DEBUG: Excluding range {}..={}", abs_start, abs_end);
                     for i in abs_start..=abs_end {
                         excluded.insert(i);
                     }
                 } else {
+                    eprintln!("DEBUG: Excluding single number {}", abs_start);
                     excluded.insert(abs_start);
                 }
             }
@@ -233,6 +269,10 @@ pub fn calculate_post_numbers(specs: Vec<RangeSpec>, max_post_number: i32) -> Ve
 
     let mut result: Vec<i32> = included.difference(&excluded).cloned().collect();
     result.sort();
+    eprintln!(
+        "DEBUG: Final result - included: {:?}, excluded: {:?}, result: {:?}",
+        included, excluded, result
+    );
     result
 }
 
