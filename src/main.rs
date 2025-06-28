@@ -41,7 +41,7 @@ impl EventHandler for Bot {
             if let Err(e) = msg
                 .reply(
                     &ctx.http,
-                    "使い方: @fetch-post 123 または @fetch-post 123-128 または @fetch-post 123- または @fetch-post 123,124-128,^322,?324-326,?^325",
+                    "使い方: @fetch-post 123 または @fetch-post 123-128 または @fetch-post 123- または @fetch-post 123,124-128 または @fetch-post ^322,?324-326,?^325",
                 )
                 .await
             {
