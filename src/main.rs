@@ -35,7 +35,7 @@ impl EventHandler for Bot {
 
         // Parse range specifications
         let specs = parse_range_specifications(&cleaned_content);
-        debug!("Input: '{}', Parsed specs: {:?}", cleaned_content, specs);
+        debug!("Input: '{cleaned_content}', Parsed specs: {specs:?}");
 
         if specs.is_empty() {
             if let Err(e) = msg
@@ -52,7 +52,7 @@ impl EventHandler for Bot {
 
         // Check if any spec requires max post number
         let needs_max = specs.iter().any(|spec| {
-            debug!("Checking spec {:?} for needs_max", spec);
+            debug!("Checking spec {spec:?} for needs_max");
             matches!(
                 spec,
                 RangeSpec::IncludeFrom(_)
@@ -63,12 +63,12 @@ impl EventHandler for Bot {
                     | RangeSpec::RelativeExcludeFrom(_, _)
             )
         });
-        debug!("needs_max = {}", needs_max);
+        debug!("needs_max = {needs_max}");
 
         let max_post_number = if needs_max {
             match get_max_post_number(&self.pool).await {
                 Ok(max) => {
-                    debug!("Got max post number: {}", max);
+                    debug!("Got max post number: {max}");
                     max
                 }
                 Err(e) => {
@@ -87,7 +87,7 @@ impl EventHandler for Bot {
         };
 
         let post_numbers = calculate_post_numbers(specs, max_post_number);
-        debug!("Calculated post numbers: {:?}", post_numbers);
+        debug!("Calculated post numbers: {post_numbers:?}");
 
         if post_numbers.is_empty() {
             if let Err(e) = msg
