@@ -1,5 +1,7 @@
 # bbs-fetch-post-discord-bot
 
+[![CI](https://github.com/toof-jp/bbs-fetch-post-discord-bot/workflows/CI/badge.svg)](https://github.com/toof-jp/bbs-fetch-post-discord-bot/actions)
+
 PostgreSQLに保存されているBBS（掲示板システム）の投稿データを取得し、Discord上で指定された投稿番号の内容を返信するDiscordボットです。
 
 ## 機能概要
