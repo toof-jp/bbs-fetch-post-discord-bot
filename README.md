@@ -2,274 +2,274 @@
 
 [![CI](https://github.com/toof-jp/bbs-fetch-post-discord-bot/workflows/CI/badge.svg)](https://github.com/toof-jp/bbs-fetch-post-discord-bot/actions)
 
-PostgreSQLに保存されているBBS（掲示板システム）の投稿データを取得し、Discord上で指定された投稿番号の内容を返信するDiscordボットです。
+A Discord bot that fetches posts from a BBS (bulletin board system) stored in PostgreSQL and replies with the specified post numbers' content on Discord.
 
-## 機能概要
+## Overview
 
-Discord上でボットをメンションして投稿番号を指定すると、該当する投稿内容を返信します。単一の投稿、範囲指定、除外指定など、柔軟な投稿番号の指定が可能です。
+When you mention the bot on Discord and specify post numbers, it replies with the corresponding post content. You can specify single posts, ranges, exclusions, and other flexible post number specifications.
 
-## 投稿番号の指定方法
+## Post Number Specification
 
-### 単一指定
+### Single Post
 
-特定の投稿番号を1つだけ指定する場合：
+To specify a single post number:
 
 ```
 @bot 123
 ```
 
-- 投稿番号123のみを表示します
+- Displays only post number 123
 
-### 範囲指定
+### Range Specification
 
-連続する投稿番号の範囲を指定する場合：
+To specify a range of consecutive post numbers:
 
-#### 閉じた範囲指定
+#### Closed Range
 
 ```
 @bot 123-128
 ```
 
-- 投稿番号123から128までの全ての投稿を表示します（123, 124, 125, 126, 127, 128）
+- Displays all posts from 123 to 128 (123, 124, 125, 126, 127, 128)
 
-#### 開いた範囲指定
+#### Open Range
 
 ```
 @bot 123-
 ```
 
-- 投稿番号123から最新の投稿まで全てを表示します
-- データベース内の最大投稿番号まで自動的に取得されます
+- Displays all posts from 123 to the latest post
+- Automatically fetches up to the maximum post number in the database
 
-### 除外指定
+### Exclusion Specification
 
-特定の投稿番号を除外したい場合は、`^`（キャレット）を使用します：
+To exclude specific post numbers, use `^` (caret):
 
-#### 単一除外
+#### Single Exclusion
 
 ```
 @bot 123-128,^126
 ```
 
-- 投稿番号123から128までを表示しますが、126は除外します
-- 結果：123, 124, 125, 127, 128
+- Displays posts from 123 to 128, but excludes 126
+- Result: 123, 124, 125, 127, 128
 
-#### 範囲除外
+#### Range Exclusion
 
 ```
 @bot 100-200,^150-160
 ```
 
-- 投稿番号100から200までを表示しますが、150から160は除外します
-- 結果：100-149, 161-200の投稿
+- Displays posts from 100 to 200, but excludes 150 to 160
+- Result: Posts 100-149, 161-200
 
-#### 開いた範囲の除外
+#### Open Range Exclusion
 
 ```
 @bot 1-,^500-
 ```
 
-- 投稿番号1から最新までを表示しますが、500以降は除外します
-- 結果：1-499の投稿
+- Displays posts from 1 to latest, but excludes 500 and later
+- Result: Posts 1-499
 
-### 相対参照指定（?プレフィックス）
+### Relative Reference (? Prefix)
 
-`?`（クエスチョンマーク）を使用することで、現在の最大投稿番号の上位桁を基準にした相対的な番号指定ができます。相対参照の桁数は`?`の後の数値の桁数に応じて自動的に調整されます：
+Using `?` (question mark) allows you to specify relative post numbers based on the upper digits of the current maximum post number. The number of digits for relative reference is automatically adjusted based on the number of digits after `?`:
 
-#### 単一の相対参照
+#### Single Relative Reference
 
 ```
 @bot ?324
 ```
 
-- 現在の最大投稿番号が123340の場合、投稿番号123324を表示します
-- `?324`は3桁なので、最大投稿番号の下3桁を324に置き換えます
+- If the current maximum post number is 123340, displays post number 123324
+- `?324` has 3 digits, so it replaces the last 3 digits of the maximum post number with 324
 
 ```
 @bot ?24
 ```
 
-- 現在の最大投稿番号が123340の場合、投稿番号123324を表示します
-- `?24`は2桁なので、最大投稿番号の下2桁を24に置き換えます
+- If the current maximum post number is 123340, displays post number 123324
+- `?24` has 2 digits, so it replaces the last 2 digits of the maximum post number with 24
 
 ```
 @bot ?1234
 ```
 
-- 現在の最大投稿番号が1234567の場合、投稿番号1231234を表示します
-- `?1234`は4桁なので、最大投稿番号の下4桁を1234に置き換えます
+- If the current maximum post number is 1234567, displays post number 1231234
+- `?1234` has 4 digits, so it replaces the last 4 digits of the maximum post number with 1234
 
-#### 相対参照の範囲指定
+#### Relative Reference Range
 
 ```
 @bot ?324-326
 ```
 
-- 現在の最大投稿番号が123340の場合、投稿番号123324から123326を表示します
+- If the current maximum post number is 123340, displays posts from 123324 to 123326
 
-#### 相対参照の除外
+#### Relative Reference Exclusion
 
 ```
 @bot ?320-330,?^325
 ```
 
-- 現在の最大投稿番号が123340の場合、投稿番号123320から123330を表示しますが、123325は除外します
+- If the current maximum post number is 123340, displays posts from 123320 to 123330, but excludes 123325
 
-#### 相対参照の開いた範囲
+#### Relative Reference Open Range
 
 ```
 @bot ?300-
 ```
 
-- 現在の最大投稿番号が123340の場合、投稿番号123300から最新（123340）までを表示します
+- If the current maximum post number is 123340, displays posts from 123300 to the latest (123340)
 
-#### 相対参照の折り返し動作
+#### Relative Reference Wraparound Behavior
 
-相対参照で計算された投稿番号が最大投稿番号を超える場合、自動的に一つ前の基準値に折り返されます：
+When a calculated post number from relative reference exceeds the maximum post number, it automatically wraps around to the previous base value:
 
 ```
 @bot ?456
 ```
 
-- 最大投稿番号が2345の場合：
-  - 通常の計算: 2000 + 456 = 2456（最大値を超える）
-  - 折り返し後: 1000 + 456 = 1456
-- 最大投稿番号が123456の場合：
-  - 計算結果: 123000 + 456 = 123456（最大値以下なので折り返さない）
+- If maximum post number is 2345:
+  - Normal calculation: 2000 + 456 = 2456 (exceeds maximum)
+  - After wraparound: 1000 + 456 = 1456
+- If maximum post number is 123456:
+  - Calculation result: 123000 + 456 = 123456 (within maximum, no wraparound)
 
-### 複合指定
+### Combined Specification
 
-カンマ（`,`）で区切ることで、複数の条件を組み合わせることができます：
+Combine multiple conditions by separating them with commas (`,`):
 
 ```
 @bot 10,20-25,30,^23
 ```
 
-- 投稿番号10、20から25、30を表示しますが、23は除外します
-- 結果：10, 20, 21, 22, 24, 25, 30
+- Displays posts 10, 20-25, and 30, but excludes 23
+- Result: 10, 20, 21, 22, 24, 25, 30
 
 ```
 @bot 1-50,100-150,^25-30,^125-130
 ```
 
-- 投稿番号1から50と100から150を表示しますが、25から30と125から130は除外します
-- 結果：1-24, 31-50, 100-124, 131-150
+- Displays posts 1-50 and 100-150, but excludes 25-30 and 125-130
+- Result: 1-24, 31-50, 100-124, 131-150
 
 ```
 @bot ?324,100-110,?^326-328
 ```
 
-- 現在の最大投稿番号が123340の場合：
-  - 投稿番号123324と100から110を表示しますが、123326から123328は除外します
-  - 結果：100-110, 123324
+- If the current maximum post number is 123340:
+  - Displays post 123324 and posts 100-110, but excludes 123326-123328
+  - Result: 100-110, 123324
 
-## 技術仕様
+## Technical Specifications
 
-### 処理フロー
+### Processing Flow
 
-1. **メンション検出**：ボットがメンションされたメッセージを検出
-2. **パース処理**：メッセージから投稿番号の指定を解析
-3. **番号計算**：
-   - 含める投稿番号のセットを作成
-   - 除外する投稿番号のセットを作成
-   - 集合演算（差集合）により最終的な投稿番号リストを生成
-4. **データベース取得**：計算された投稿番号リストに基づいてPostgreSQLから投稿データを取得
-5. **返信**：取得した投稿内容をDiscordに返信
+1. **Mention Detection**: Detects messages where the bot is mentioned
+2. **Parse Processing**: Parses post number specifications from the message
+3. **Number Calculation**:
+   - Creates a set of post numbers to include
+   - Creates a set of post numbers to exclude
+   - Generates the final post number list using set operations (difference)
+4. **Database Retrieval**: Fetches post data from PostgreSQL based on the calculated post number list
+5. **Reply**: Replies with the fetched post content on Discord
 
-### 制限事項
+### Limitations
 
-- Discordの文字数制限により、1メッセージあたり1800文字を超える場合は分割して送信されます
-- 指定された投稿番号が存在しない場合は、存在する投稿のみが表示されます
-- 開いた範囲指定（例：`123-`）や相対参照（例：`?324`）を使用する場合、データベースへの追加クエリが発生します
-- 画像付き投稿は個別のメッセージとして送信されるため、表示順序が前後する場合があります
-- 相対参照は指定された桁数に応じて最大投稿番号の下位桁を置き換えます。最大投稿番号の桁数が指定された桁数より少ない場合は、相対参照は通常の投稿番号として扱われます
+- Due to Discord's character limit, messages exceeding 1800 characters are split and sent separately
+- If specified post numbers don't exist, only existing posts are displayed
+- When using open ranges (e.g., `123-`) or relative references (e.g., `?324`), additional database queries are required
+- Posts with images are sent as separate messages, which may affect display order
+- Relative references replace the lower digits of the maximum post number according to the specified number of digits. If the maximum post number has fewer digits than specified, the relative reference is treated as a regular post number
 
-### データベーススキーマ
+### Database Schema
 
-投稿データは以下の構造で保存されています：
+Post data is stored with the following structure:
 
 ```sql
 CREATE TABLE res (
-    no INTEGER PRIMARY KEY,           -- 投稿番号
-    name_and_trip TEXT NOT NULL,      -- 投稿者名とトリップ
-    datetime TIMESTAMP NOT NULL,      -- 投稿日時
-    datetime_text TEXT NOT NULL,      -- 投稿日時（テキスト形式）
-    id TEXT NOT NULL,                 -- 投稿者ID
-    main_text TEXT NOT NULL,          -- 投稿本文（プレーンテキスト）
-    main_text_html TEXT NOT NULL,     -- 投稿本文（HTML）
-    oekaki_id INTEGER                 -- お絵かきID（オプション）
+    no INTEGER PRIMARY KEY,           -- Post number
+    name_and_trip TEXT NOT NULL,      -- Poster name and trip
+    datetime TIMESTAMP NOT NULL,      -- Post datetime
+    datetime_text TEXT NOT NULL,      -- Post datetime (text format)
+    id TEXT NOT NULL,                 -- Poster ID
+    main_text TEXT NOT NULL,          -- Post content (plain text)
+    main_text_html TEXT NOT NULL,     -- Post content (HTML)
+    oekaki_id INTEGER                 -- Drawing ID (optional)
 );
 ```
 
-### 出力フォーマット
+### Output Format
 
-各投稿は以下の形式で表示されます：
+Each post is displayed in the following format:
 
 ```
-### __[投稿番号] [投稿者名] [投稿日時] ID: [投稿者ID]__
-[投稿本文]
+### __[Post Number] [Poster Name] [Post DateTime] ID: [Poster ID]__
+[Post Content]
 ```
 
-## 画像レス対応
+## Image Post Support
 
-投稿にお絵かきID（`oekaki_id`）が含まれている場合、該当する画像が自動的にDiscordに埋め込み（embed）として表示されます。画像URLは環境変数`IMAGE_URL_PREFIX`と`oekaki_id`を組み合わせて生成されます。
+When a post contains a drawing ID (`oekaki_id`), the corresponding image is automatically displayed as a Discord embed. The image URL is generated by combining the environment variable `IMAGE_URL_PREFIX` with the `oekaki_id`.
 
-例：`IMAGE_URL_PREFIX`が`https://example.com/images/`で、`oekaki_id`が`123`の場合、画像URLは`https://example.com/images/123.png`となります。
+Example: If `IMAGE_URL_PREFIX` is `https://example.com/images/` and `oekaki_id` is `123`, the image URL becomes `https://example.com/images/123.png`.
 
-## 環境設定
+## Environment Configuration
 
-以下の環境変数を`.env`ファイルに設定する必要があります：
+The following environment variables must be set in the `.env` file:
 
 ```env
 DISCORD_TOKEN=your_discord_bot_token
 DATABASE_URL=postgresql://username:password@host:port/database
 IMAGE_URL_PREFIX=https://example.com/images/
 
-# ログレベル設定（オプション）
-# 設定可能な値: error, warn, info, debug, trace
-# デフォルト: info
+# Log level configuration (optional)
+# Available values: error, warn, info, debug, trace
+# Default: info
 RUST_LOG=info
 ```
 
-### ログレベルの設定
+### Log Level Configuration
 
-`RUST_LOG`環境変数でログの詳細度を制御できます：
+You can control the log verbosity with the `RUST_LOG` environment variable:
 
-- `RUST_LOG=error`: エラーのみ表示
-- `RUST_LOG=warn`: 警告とエラーを表示
-- `RUST_LOG=info`: 情報、警告、エラーを表示（デフォルト）
-- `RUST_LOG=debug`: デバッグ情報を含むすべてのログを表示
-- `RUST_LOG=trace`: 最も詳細なログを表示
+- `RUST_LOG=error`: Show only errors
+- `RUST_LOG=warn`: Show warnings and errors
+- `RUST_LOG=info`: Show info, warnings, and errors (default)
+- `RUST_LOG=debug`: Show all logs including debug information
+- `RUST_LOG=trace`: Show the most detailed logs
 
-特定のモジュールのログレベルを個別に設定することも可能です：
+You can also set log levels for specific modules individually:
 
 ```env
-# botのデバッグログを表示し、serenityは情報レベルのみ
+# Show debug logs for the bot, but only info level for serenity
 RUST_LOG=bbs_fetch_post_discord_bot=debug,serenity=info
 ```
 
-## 依存関係
+## Dependencies
 
-- **Serenity 0.12.4**：Discord APIとの通信
-- **SQLx 0.7**：PostgreSQLデータベースとの非同期通信
-- **Tokio**：非同期ランタイム
-- **その他**：regex（正規表現）、chrono（日時処理）、anyhow（エラーハンドリング）など
+- **Serenity 0.12.4**: Discord API communication
+- **SQLx 0.7**: Asynchronous PostgreSQL database communication
+- **Tokio**: Asynchronous runtime
+- **Others**: regex (regular expressions), chrono (datetime handling), anyhow (error handling), etc.
 
-## ビルドと実行
+## Build and Run
 
 ```bash
-# 開発環境での実行
+# Run in development environment
 cargo run
 
-# リリースビルド
+# Release build
 cargo build --release
 
-# テストの実行
+# Run tests
 cargo test
 
-# コードフォーマット
+# Format code
 cargo fmt
 
-# リンターの実行
+# Run linter
 cargo clippy
 ```
